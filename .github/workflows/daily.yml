@@ -12,6 +12,9 @@ on:
         description: 'Rebuild even if the day exists'
         type: boolean
         default: false
+      chain:
+        description: 'Force a chain (shufersal / ramilevy); default alternates by date'
+        required: false
 
 permissions:
   contents: write
@@ -33,6 +36,7 @@ jobs:
           ARGS=""
           [ -n "${{ github.event.inputs.date }}" ] && ARGS="$ARGS --date ${{ github.event.inputs.date }}"
           [ "${{ github.event.inputs.force }}" = "true" ] && ARGS="$ARGS --force"
+          [ -n "${{ github.event.inputs.chain }}" ] && ARGS="$ARGS --chain ${{ github.event.inputs.chain }}"
           python pipeline/build_day.py $ARGS
       - name: Commit and push
         run: |
