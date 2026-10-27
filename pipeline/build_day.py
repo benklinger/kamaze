@@ -118,17 +118,22 @@ def shufersal_store_name(store_id):
 
 
 # ---------------- Rami Levy (publishedprices.co.il portal) ----------------
+def csrf_token(page):
+    m = (re.search(r'<meta\s+name="csrftoken"\s+content="([^"]+)"', page)
+         or re.search(r'name="csrftoken"[^>]*value="([^"]+)"', page)
+         or re.search(r'value="([^"]+)"[^>]*name="csrftoken"', page))
+    return m.group(1) if m else ''
+
+
 def fetch_ramilevy(preferred):
     cj = http.cookiejar.CookieJar()
     op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
     login_page = http_get('https://url.publishedprices.co.il/login', op).decode('utf-8', 'replace')
-    m = re.search(r'name="csrftoken"[^>]*value="([^"]+)"', login_page) or re.search(r'value="([^"]+)"[^>]*name="csrftoken"', login_page)
-    token = m.group(1) if m else ''
+    token = csrf_token(login_page)
     http_get('https://url.publishedprices.co.il/login/user', op,
              data=urllib.parse.urlencode({'csrftoken': token, 'username': 'RamiLevi', 'password': '', 'r': ''}).encode())
     file_page = http_get('https://url.publishedprices.co.il/file', op).decode('utf-8', 'replace')
-    m = re.search(r'csrftoken[^>]*value="([^"]+)"', file_page) or re.search(r'value="([^"]+)"[^>]*csrftoken', file_page)
-    token = m.group(1) if m else token
+    token = csrf_token(file_page) or token
     body = urllib.parse.urlencode({'sEcho': 1, 'iColumns': 5, 'sColumns': ',,,,', 'iDisplayStart': 0, 'iDisplayLength': 1000,
                                    'sSearch': 'PriceFull', 'cd': '/', 'csrftoken': token}).encode()
     listing = json.loads(http_get('https://url.publishedprices.co.il/file/json/dir', op, data=body, headers={'X-Requested-With': 'XMLHttpRequest'}))
@@ -199,9 +204,10 @@ def make_range(price, rng):
     return lo, hi
 
 
-def recent_barcodes(days=14):
+def recent_barcodes(exclude_date, days=14):
     seen = set()
-    for p in sorted(DAYS.glob('*.json'), reverse=True)[:days]:
+    files = [p for p in sorted(DAYS.glob('*.json'), reverse=True) if p.stem != exclude_date]
+    for p in files[:days]:
         try:
             d = json.loads(p.read_text(encoding='utf-8'))
             seen.update(x['barcode'] for x in d['products'])
@@ -234,7 +240,7 @@ def build(date, chain, items, store_label):
     log(f'{len(avail)}/{len(staples)} staples found in feed')
     if len(avail) < 8:
         raise RuntimeError('too few staples found in this feed')
-    recent = recent_barcodes()
+    recent = recent_barcodes(date)
 
     # basket: all products must be in the feed; prefer baskets not used recently
     baskets = [b for b in BASKETS if all(x in avail for x in b['barcodes'])]
