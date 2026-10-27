@@ -16,6 +16,7 @@ DAYS = DATA / 'days'
 IMAGES = ROOT / 'images'
 STAPLES = json.loads((ROOT / 'pipeline' / 'staples.json').read_text(encoding='utf-8'))
 BASKETS = json.loads((ROOT / 'pipeline' / 'baskets.json').read_text(encoding='utf-8'))
+CITIES = json.loads((ROOT / 'pipeline' / 'cities.json').read_text(encoding='utf-8'))  # CBS locality code -> name (data.gov.il)
 UA = 'kamaze-game/1.0 (+https://github.com/benklinger/kamaze)'
 TZ = dt.timezone(dt.timedelta(hours=2))  # Israel standard time; only used to pick "today"
 
@@ -34,6 +35,12 @@ CHAINS = {
 
 def log(*a):
     print(*a, file=sys.stderr, flush=True)
+
+
+def city_name(city):
+    """Feeds give the city as a name or as a CBS locality code; unknown codes are dropped."""
+    city = (city or '').strip()
+    return CITIES.get(str(int(city)), '') if city.isdigit() else city
 
 
 def http_get(url, opener=None, data=None, timeout=90, headers=None):
@@ -186,7 +193,7 @@ def fetch_ramilevy(preferred):
                     if st.tag.lower() == 'store':
                         f = {c.tag.lower(): (c.text or '').strip() for c in st}
                         if f.get('storeid', '').lstrip('0') == (store_id or parts(chosen)['store']).lstrip('0'):
-                            label = f"רמי לוי {f.get('storename', '')}, {f.get('city', '')}".strip(', ')
+                            label = f"רמי לוי {f.get('storename', '')}, {city_name(f.get('city'))}".strip(', ')
                             break
         except Exception as e:  # noqa
             log('store name lookup failed:', e)
