@@ -27,7 +27,7 @@ CHAINS = {
     },
     'ramilevy': {
         'name': 'רמי לוי',
-        'stores': [('1', 'רמי לוי שיווק השקמה'), ],  # any store accepted as fallback, name read from the feed
+        'stores': [],  # lowest store id published today is used; its name is read from the Stores file
     },
 }
 
@@ -138,37 +138,36 @@ def fetch_ramilevy(preferred):
                                    'sSearch': 'PriceFull', 'cd': '/', 'csrftoken': token}).encode()
     listing = json.loads(http_get('https://url.publishedprices.co.il/file/json/dir', op, data=body, headers={'X-Requested-With': 'XMLHttpRequest'}))
     rows = listing.get('aaData') or listing.get('data') or []
-    names = []
-    for r in rows:
-        s = json.dumps(r, ensure_ascii=False)
-        names += re.findall(r'(PriceFull\d+-\d+-\d{12}\.(?:gz|xml|zip))', s)
-    names = sorted(set(names), reverse=True)
+    names = sorted(set(re.findall(r'(PriceFull\d{10,}(?:-\d+){2,4}\.(?:gz|xml|zip))', json.dumps(rows))), reverse=True)
     if not names:
         log('Rami Levy listing (first 600 chars):', json.dumps(listing, ensure_ascii=False)[:600])
-        log('Rami Levy file page (first 400 chars):', re.sub(r'\s+', ' ', file_page)[:400])
         raise RuntimeError('Rami Levy: no PriceFull files listed')
+
+    def parts(n):  # PriceFull<chain>-<subchain>-<store>-<YYYYMMDD>-<HHMMSS>.gz (older portals omit the subchain)
+        seg = n.split('.')[0].split('-')
+        return {'store': seg[2] if len(seg) >= 5 else seg[1], 'date': seg[-2] if len(seg) >= 4 else '', 'time': seg[-1]}
     today = dt.datetime.now(TZ).strftime('%Y%m%d')
-    todays = [n for n in names if f'-{today}' in n] or names
-    def store_of(n):
-        return re.search(r'PriceFull\d+-(\d+)-', n).group(1).lstrip('0') or '0'
-    chosen, label = None, None
+    todays = [n for n in names if parts(n)['date'] == today] or names
+    by_store = {}
+    for n in todays:  # keep the newest file per store
+        st = parts(n)['store'].lstrip('0') or '0'
+        if st not in by_store or parts(n)['time'] > parts(by_store[st])['time']:
+            by_store[st] = n
+    label = None
     for sid, lbl in preferred:
-        for n in todays:
-            if store_of(n) == sid:
-                chosen, label = n, lbl
-                break
-        if chosen:
+        if sid in by_store:
+            chosen, label = by_store[sid], lbl
             break
-    if not chosen:
-        chosen = todays[0]
+    else:
+        chosen = by_store[min(by_store, key=lambda x: int(x))]  # lowest store id: stable day to day
     log('Rami Levy file:', chosen)
     store_id, items = read_price_file(http_get('https://url.publishedprices.co.il/file/d/' + chosen, op))
     if not label:
-        label = f'רמי לוי (סניף {store_id or store_of(chosen)})'
+        label = f'רמי לוי (סניף {store_id or parts(chosen)["store"]})'
         try:  # try to resolve the store name from the Stores file
             body = urllib.parse.urlencode({'sEcho': 1, 'iColumns': 5, 'iDisplayStart': 0, 'iDisplayLength': 50, 'sSearch': 'Stores', 'cd': '/', 'csrftoken': token}).encode()
             lst = json.loads(http_get('https://url.publishedprices.co.il/file/json/dir', op, data=body, headers={'X-Requested-With': 'XMLHttpRequest'}))
-            sn = re.findall(r'(Stores\d+-\d+-\d{12}\.(?:gz|xml|zip))', json.dumps(lst))
+            sn = re.findall(r'(Stores\d{10,}(?:-\d+){1,4}\.(?:gz|xml|zip))', json.dumps(lst))
             if sn:
                 raw = http_get('https://url.publishedprices.co.il/file/d/' + sorted(sn)[-1], op)
                 if raw[:2] == b'\x1f\x8b':
@@ -177,7 +176,7 @@ def fetch_ramilevy(preferred):
                 for st in root.iter():
                     if st.tag.lower() == 'store':
                         f = {c.tag.lower(): (c.text or '').strip() for c in st}
-                        if f.get('storeid', '').lstrip('0') == (store_id or store_of(chosen)).lstrip('0'):
+                        if f.get('storeid', '').lstrip('0') == (store_id or parts(chosen)['store']).lstrip('0'):
                             label = f"רמי לוי {f.get('storename', '')}, {f.get('city', '')}".strip(', ')
                             break
         except Exception as e:  # noqa
