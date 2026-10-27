@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>כמה עולה?</title>
+  <meta name="description" content="משחק יומי: נחשו כמה עולה מוצר בסופר. מחירים אמיתיים מהיום, מרשתות השיווק בישראל.">
+  <meta property="og:title" content="כמה עולה?">
+  <meta property="og:description" content="משחק צרכנות יומי – נחשו את המחיר האמיתי של מוצר בסופר.">
+  <meta name="theme-color" content="#2F872A">
+  <link rel="icon" href="images/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a href="#/" class="header-title">כמה עולה?</a>
+    <nav class="header-nav">
+      <a href="#/archive" title="ארכיון" aria-label="ארכיון">📅</a>
+      <a href="#/stats" title="סטטיסטיקה" aria-label="סטטיסטיקה">📊</a>
+    </nav>
+  </header>
+  <main id="app" class="container" aria-live="polite">
+    <p class="muted">טוען...</p>
+  </main>
+  <footer id="footer"></footer>
+  <div id="toast" class="toast" role="status"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
