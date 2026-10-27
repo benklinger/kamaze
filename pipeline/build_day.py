@@ -43,14 +43,29 @@ def http_get(url, opener=None, data=None, timeout=90, headers=None):
         return r.read()
 
 
+def decompress(raw):
+    """gz / zip / plain payload -> bytes of the inner XML."""
+    if raw[:2] == b'\x1f\x8b':
+        return gzip.decompress(raw)
+    if raw[:2] == b'PK':
+        with zipfile.ZipFile(io.BytesIO(raw)) as z:
+            return z.read(z.namelist()[0])
+    return raw
+
+
+def parse_xml(raw):
+    raw = decompress(raw)
+    for enc in ('utf-8-sig', 'utf-16', 'cp1255'):
+        try:
+            return ET.fromstring(raw.decode(enc))
+        except (UnicodeDecodeError, ET.ParseError):
+            continue
+    return ET.fromstring(raw.decode('utf-8-sig', errors='replace'))
+
+
 def read_price_file(raw):
     """Return (store_id, {barcode: (name, price)}) from a gz/zip/xml PriceFull payload."""
-    if raw[:2] == b'\x1f\x8b':
-        raw = gzip.decompress(raw)
-    elif raw[:2] == b'PK':
-        with zipfile.ZipFile(io.BytesIO(raw)) as z:
-            raw = z.read(z.namelist()[0])
-    root = ET.fromstring(raw.decode('utf-8-sig', errors='replace'))
+    root = parse_xml(raw)
     def find(node, name):
         for c in node.iter():
             if c.tag.lower() == name.lower():
@@ -102,10 +117,7 @@ def shufersal_store_name(store_id):
     try:
         page = http_get('https://prices.shufersal.co.il/FileObject/UpdateCategory?catID=5&storeId=0').decode('utf-8', 'replace')
         m = re.search(r'href="(https://[^"]+/stores/Stores[^"]+)"', page)
-        raw = http_get(html.unescape(m.group(1)))
-        if raw[:2] == b'\x1f\x8b':
-            raw = gzip.decompress(raw)
-        root = ET.fromstring(raw.decode('utf-8-sig', 'replace'))
+        root = parse_xml(http_get(html.unescape(m.group(1))))
         for sc in root.iter('SubChain'):
             sub = (sc.findtext('SubChainName') or '').strip()
             for st in sc.iter('Store'):
@@ -169,10 +181,7 @@ def fetch_ramilevy(preferred):
             lst = json.loads(http_get('https://url.publishedprices.co.il/file/json/dir', op, data=body, headers={'X-Requested-With': 'XMLHttpRequest'}))
             sn = re.findall(r'(Stores\d{10,}(?:-\d+){1,4}\.(?:gz|xml|zip))', json.dumps(lst))
             if sn:
-                raw = http_get('https://url.publishedprices.co.il/file/d/' + sorted(sn)[-1], op)
-                if raw[:2] == b'\x1f\x8b':
-                    raw = gzip.decompress(raw)
-                root = ET.fromstring(raw.decode('utf-8-sig', 'replace'))
+                root = parse_xml(http_get('https://url.publishedprices.co.il/file/d/' + sorted(sn)[-1], op))
                 for st in root.iter():
                     if st.tag.lower() == 'store':
                         f = {c.tag.lower(): (c.text or '').strip() for c in st}
