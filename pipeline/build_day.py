@@ -144,6 +144,8 @@ def fetch_ramilevy(preferred):
         names += re.findall(r'(PriceFull\d+-\d+-\d{12}\.(?:gz|xml|zip))', s)
     names = sorted(set(names), reverse=True)
     if not names:
+        log('Rami Levy listing (first 600 chars):', json.dumps(listing, ensure_ascii=False)[:600])
+        log('Rami Levy file page (first 400 chars):', re.sub(r'\s+', ' ', file_page)[:400])
         raise RuntimeError('Rami Levy: no PriceFull files listed')
     today = dt.datetime.now(TZ).strftime('%Y%m%d')
     todays = [n for n in names if f'-{today}' in n] or names
